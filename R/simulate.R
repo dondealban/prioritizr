@@ -3,7 +3,7 @@ NULL
 
 #' Simulate data
 #'
-#' Simulate spatially auto-correlated data using random fields.
+#' Simulate spatially auto-correlated data.
 #'
 #' @param x \code{\link[raster]{RasterLayer-class}} object to use as
 #    a template.
@@ -37,7 +37,6 @@ NULL
 #' # plot simulated data
 #' plot(d, main = "random Gaussian field")
 #' }
-#'
 #' @export
 simulate_data <- function(x, n, model, transform = identity, ...) {
   # assert valid arguments
@@ -67,7 +66,7 @@ simulate_data <- function(x, n, model, transform = identity, ...) {
   return(stk)
 }
 
-#' Simulate species habitat suitabilities
+#' Simulate species habitat suitability data
 #'
 #' Generates a random set of species using random field models. By default,
 #' the output will contain values between zero and one.

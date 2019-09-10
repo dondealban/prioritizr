@@ -3,14 +3,12 @@ NULL
 
 #' Find intersecting units
 #'
-#' Determine the units in a given spatial data object that intersect
-#' with any of the units in another spatial data object.
+#' Find which of the units in a spatial data object intersect
+#' with the units in another spatial data object.
 #'
 #' @param x \code{\link{Spatial-class}} or \code{\link{Raster-class}} object.
 #'
 #' @param y \code{\link{Spatial-class}} or \code{\link{Raster-class}} object.
-#'
-#' @param ... not used.
 #'
 #' @return \code{integer} indices of the units in \code{x} that intersect with
 #'   \code{y}.
@@ -28,55 +26,62 @@ NULL
 #' @aliases intersecting_units,Raster,Raster-method intersecting_units,Raster,Spatial-method intersecting_units,Spatial,Raster-method intersecting_units,Spatial,Spatial-method intersecting_units,data.frame,ANY-method
 #'
 #' @examples
-#' ## create data
+#' # create data
 #' r <- raster(matrix(1:9, byrow = TRUE, ncol=3))
 #' r_with_holes <- r
 #' r_with_holes[c(1, 5, 9)] <- NA
 #' ply <- rasterToPolygons(r)
 #' ply_with_holes <- rasterToPolygons(r_with_holes)
 #'
-#' ## intersect raster with raster
+#' # intersect raster with raster
+#' \donttest{
 #' par(mfrow = c(1, 2))
-#' plot(r, main = 'x=Raster')
-#' plot(r_with_holes, main = 'y=Raster')
+#' plot(r, main = "x=Raster")
+#' plot(r_with_holes, main = "y=Raster")
+#' }
 #' print(intersecting_units(r, r_with_holes))
 #'
-#' ## intersect raster with polygons
+#' # intersect raster with polygons
+#' \donttest{
 #' par(mfrow = c(1, 2))
-#' plot(r, main = 'x=Raster')
-#' plot(ply_with_holes, main = 'y=Spatial')
+#' plot(r, main = "x=Raster")
+#' plot(ply_with_holes, main = "y=Spatial")
+#' }
 #' print(intersecting_units(r, ply_with_holes))
 #'
-#' ## intersect polygons with raster
+#' # intersect polygons with raster
+#' \donttest{
 #' par(mfrow = c(1, 2))
-#' plot(ply, main = 'x=Spatial')
-#' plot(r_with_holes, main = 'y=Raster')
+#' plot(ply, main = "x=Spatial")
+#' plot(r_with_holes, main = "y=Raster")
+#' }
 #' print(intersecting_units(ply, r_with_holes))
 #'
-#' ## intersect polygons with polygons
+#' # intersect polygons with polygons
+#' \donttest{
 #' par(mfrow = c(1, 2))
-#' plot(ply, main = 'x=Spatial')
-#' plot(ply_with_holes, main = 'y=Spatial')
+#' plot(ply, main = "x=Spatial")
+#' plot(ply_with_holes, main = "y=Spatial")
+#' }
 #' print(intersecting_units(ply, ply_with_holes))
 #'
 #' @export
 methods::setGeneric("intersecting_units",
                     signature = methods::signature("x", "y"),
-                    function(x, y, ...)
+                    function(x, y)
                       standardGeneric("intersecting_units"))
 
 #' @name intersecting_units
-#' @usage \S4method{intersecting_units}{Raster,Raster}(x, y, ...)
+#' @usage \S4method{intersecting_units}{Raster,Raster}(x, y)
 #' @rdname intersecting_units
 methods::setMethod(
   "intersecting_units",
   methods::signature(x = "Raster", y = "Raster"),
-  function(x, y, ...) {
+  function(x, y) {
     # assert arguments are valid
     assertthat::assert_that(inherits(x, "Raster"), inherits(y, "Raster"),
       isTRUE(raster::nlayers(x) == 1), raster::compareCRS(x@crs, y@crs),
-      raster::compareRaster(x, y, crs = TRUE, res = TRUE, tolerance = 1e-5,
-                            stopiffalse = FALSE))
+      is_comparable_raster(x, y))
     if (inherits(x, c("RasterStack", "RasterBrick"))) x <- x[[1]]
     if (inherits(y, c("RasterStack", "RasterBrick"))) y <- y[[1]]
     y <- as.logical(y)
@@ -88,12 +93,12 @@ methods::setMethod(
 )
 
 #' @name intersecting_units
-#' @usage \S4method{intersecting_units}{Spatial,Spatial}(x, y, ...)
+#' @usage \S4method{intersecting_units}{Spatial,Spatial}(x, y)
 #' @rdname intersecting_units
 methods::setMethod(
   "intersecting_units",
   methods::signature(x = "Spatial", y = "Spatial"),
-  function(x, y, ...) {
+  function(x, y) {
     # assert arguments are valid
     assertthat::assert_that(
       inherits(x, "Spatial"), inherits(x, "Spatial"),
@@ -113,12 +118,12 @@ methods::setMethod(
 )
 
 #' @name intersecting_units
-#' @usage \S4method{intersecting_units}{Raster,Spatial}(x, y, ...)
+#' @usage \S4method{intersecting_units}{Raster,Spatial}(x, y)
 #' @rdname intersecting_units
 methods::setMethod(
   "intersecting_units",
   methods::signature(x = "Raster", y = "Spatial"),
-  function(x, y, ...) {
+  function(x, y) {
     # assert arguments are valid
     assertthat::assert_that(
       inherits(x, "Raster"), inherits(y, "Spatial"),
@@ -137,11 +142,11 @@ methods::setMethod(
 )
 
 #' @name intersecting_units
-#' @usage \S4method{intersecting_units}{Spatial,Raster}(x, y, ...)
+#' @usage \S4method{intersecting_units}{Spatial,Raster}(x, y)
 #' @rdname intersecting_units
 methods::setMethod("intersecting_units",
   methods::signature(x = "Spatial", y = "Raster"),
-  function(x, y, ...) {
+  function(x, y) {
     # assert arguments are valid
     assertthat::assert_that(
       inherits(x, "Spatial"), inherits(y, "Raster"),
@@ -161,13 +166,13 @@ methods::setMethod("intersecting_units",
 )
 
 #' @name intersecting_units
-#' @usage \S4method{intersecting_units}{data.frame,ANY}(x, y, ...)
+#' @usage \S4method{intersecting_units}{data.frame,ANY}(x, y)
 #' @rdname intersecting_units
 methods::setMethod(
   "intersecting_units",
   methods::signature(x = "data.frame", y = "ANY"),
-  function(x, y, ...) {
+  function(x, y) {
     stop("planning units are stored as a data.frame and so the required ",
-         "spatial analysis cannot be performed.")
+         "spatial analysis cannot be performed")
   }
 )

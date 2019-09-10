@@ -5,9 +5,6 @@
 \alias{fast_extract,Raster,SpatialLines-method}
 \alias{fast_extract,Raster,SpatialPoints-method}
 \alias{fast_extract,Raster,SpatialPolygons-method}
-\alias{fast_extract}
-\alias{fast_extract}
-\alias{fast_extract}
 \title{Fast extract}
 \usage{
 \S4method{fast_extract}{Raster,SpatialPolygons}(x, y, fun = mean, velox = requireNamespace("velox", quietly = TRUE), ...)
@@ -52,7 +49,7 @@ Spatial analyses will be conducted using the
 # load data
 data(sim_pu_polygons, sim_features)
 \donttest{
-# we will investigate severals ways for extracting values from a raster
+# we will investigate several ways for extracting values from a raster
 # using polygons. Specifically, for each band in the raster,
 # for each polygon in the vector layer, calculate the average
 # of the cells that are inside the polygon.

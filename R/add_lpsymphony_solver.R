@@ -1,43 +1,27 @@
 #' @include Solver-proto.R
 NULL
 
-#' Add a SYMPHONY solver with lpsymphony
+#' Add a SYMPHONY solver with \pkg{lpsymphony}
 #'
-#' Specify the use of a SYMPHONY algorithm to solve a
-#' \code{\link{ConservationProblem-class}} object. Requires the
-#' \code{lpsymphony} package.
+#' Specify that the \emph{SYMPHONY} software should be used to solve a
+#' conservation planning problem using the \pkg{lpsymphony} package. This
+#' function can also be used to customize the behavior of the solver.
+#' It requires the \pkg{lpsymphony} package.
 #'
-#' @details
-#'    The \code{lpsymphony} package provides a
-#'    different interface to the COIN-OR software suite. Unlike the
-#'    \code{Rsymhpony} package, the \code{lpsymphony} package is distributed
-#'    through
-#'    \href{https://doi.org/doi:10.18129/B9.bioc.lpsymphony}{Bioconductor}.
-#'    On Windows and Mac, \code{lpsymphony}
-#'    may be easier to install. This solver uses the \code{lpsymphony} package
-#'    to solve.
+#' @inheritParams add_rsymphony_solver
 #'
-#' @param x \code{\link{ConservationProblem-class}} object.
+#' @details \href{https://projects.coin-or.org/SYMPHONY}{\emph{SYMPHONY}} is an
+#'   open-source integer programming solver that is part of the Computational
+#'   Infrastructure for Operations Research (COIN-OR) project, an initiative
+#'   to promote development of open-source tools for operations research (a
+#'   field that includes linear programming). The \pkg{lpsymphony} package is
+#'   distributed through
+#'   \href{https://doi.org/doi:10.18129/B9.bioc.lpsymphony}{Bioconductor}.
+#'   This functionality is provided because the \pkg{lpsymphony} package may
+#'   be easier to install to install on Windows and Mac OSX systems than the
+#'   \pkg{Rsymphony} package.
 #'
-#' @param gap \code{numeric} gap to optimality. This gap is absolute and
-#'   expresses the acceptable deviance from the optimal objective. For example,
-#'   solving a minimum set objective problem with a gap of 5 will cause the
-#'   solver to terminate when the cost of the solution is within 5 cost units
-#'   from the optimal solution.
-#'
-#' @param time_limit \code{numeric} time limit in seconds to run the optimizer.
-#'   The solver will return the current best solution when this time limit is
-#'   exceeded.
-#'
-#' @param first_feasible \code{logical} should the first feasible solution be
-#'   be returned? If \code{first_feasible} is set to \code{TRUE}, the solver
-#'   will return the first solution it encounters that meets all the
-#'   constraints, regardless of solution quality. Note that the first feasible
-#'   solution is not an arbitrary solution, rather it is derived from the
-#'   relaxed solution, and is therefore often reasonably close to optimality.
-#'
-#' @param verbose \code{logical} should information be printed while solving
-#'  optimization problems? Defaults to \code{TRUE}.
+#' @inherit add_rsymphony_solver seealso return
 #'
 #' @seealso \code{\link{solvers}}.
 #'
@@ -52,9 +36,9 @@ NULL
 #'   add_binary_decisions()
 #' \donttest{
 #' # if the package is installed then add solver and generate solution
-#' # note that this solver is skipped on Linux systems due to instability
-#' # issues
-#' if (requireNamespace("lpsymphony", quietly = TRUE) &
+#' # note that this solver is skipped on Linux systems due to the fact
+#' # that the lpsymphony package randomly crashes on these systems
+#' if (require(lpsymphony) &
 #'     isTRUE(Sys.info()[["sysname"]] != "Linux")) {
 #'   # specify solver and generate solution
 #'   s <- p %>% add_lpsymphony_solver(time_limit = 5) %>%
@@ -88,18 +72,25 @@ add_lpsymphony_solver <- function(x, gap = 0.1, time_limit = -1,
                           isTRUE(first_feasible == 1 || isTRUE(first_feasible
                             == 0)),
                           requireNamespace("lpsymphony", quietly = TRUE))
+  # throw warning about bug in lpsymphony
+  if (utils::packageVersion("lpsymphony") <= as.package_version("1.4.1"))
+    warning(paste0("The solution may be incorrect due to a bug in ",
+                   "lpsymphony, please verify that it is correct, ",
+                   "or use a different solver to generate solutions"))
   # add solver
   x$add_solver(pproto(
     "LpsymphonySolver",
     Solver,
     name = "Lpsymphony",
+    data = list(),
     parameters = parameters(
       numeric_parameter("gap", gap, lower_limit = 0),
       integer_parameter("time_limit", time_limit, lower_limit = -1,
                         upper_limit = .Machine$integer.max),
       binary_parameter("first_feasible", first_feasible),
       binary_parameter("verbose", verbose)),
-    solve = function(self, x) {
+    calculate = function(self, x, ...) {
+      # create model
       model <- list(
         obj = x$obj(),
         mat = as.matrix(x$A()),
@@ -118,15 +109,49 @@ add_lpsymphony_solver <- function(x, gap = 0.1, time_limit = -1,
       model$dir <- replace(model$dir, model$dir == "=", "==")
       model$types <- replace(model$types, model$types == "S", "C")
       p$first_feasible <- as.logical(p$first_feasible)
+      # store input data and parameters
+      self$set_data("model", model)
+      self$set_data("parameters", p)
+      # return success
+      invisible(TRUE)
+    },
+    run = function(self) {
+      # access input data and parameters
+      model <- self$get_data("model")
+      p <- self$get_data("parameters")
+      # solve problem
       start_time <- Sys.time()
-      s <- do.call(lpsymphony::lpsymphony_solve_LP, append(model, p))
+      x <- do.call(lpsymphony::lpsymphony_solve_LP, append(model, p))
       end_time <- Sys.time()
-      if (is.null(s$solution) ||
-          names(s$status) %in% c("TM_NO_SOLUTION", "PREP_NO_SOLUTION"))
+      if (is.null(x$solution) ||
+          names(x$status) %in% c("TM_NO_SOLUTION", "PREP_NO_SOLUTION"))
         return(NULL)
-      return(list(x = s$solution, objective = s$objval,
-                  status = as.character(s$status),
+      if (any(x$solution > 1)) {
+        if (max(x$solution) < 1.01) {
+          x$solution[x$solution > 1] <- 1
+        } else {
+          stop("infeasible solution returned, try relaxing solver parameters")
+        }
+      }
+      if (any(x$solution < 0)) {
+        if (min(x$solution) > -0.01) {
+          x$solution[x$solution < 0] <- 0
+        } else {
+          stop("infeasible solution returned, try relaxing solver parameters")
+        }
+      }
+      # return output
+      return(list(x = x$solution, objective = x$objval,
+                  status = as.character(x$status),
                   runtime = as.double(end_time - start_time,
                                       format = "seconds")))
+    },
+    set_variable_ub = function(self, index, value) {
+      self$data$model$bounds$upper$val[index] <- value
+      invisible(TRUE)
+    },
+    set_variable_lb = function(self, index, value) {
+      self$data$model$bounds$lower$val[index] <- value
+      invisible(TRUE)
     }))
 }

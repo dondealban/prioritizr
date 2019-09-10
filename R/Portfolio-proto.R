@@ -2,7 +2,8 @@
 NULL
 
 #' @export
-methods::setOldClass("Portfolio")
+if (!methods::isClass("Portfolio")) methods::setOldClass("Portfolio")
+NULL
 
 #' Portfolio prototype
 #'
@@ -74,12 +75,14 @@ Portfolio <- pproto(
     self$print()
   },
   repr = function(self) {
-    paste(self$name, self$parameters$repr())
+    if (self$parameters$length() > 0)
+      return(paste(self$name, self$parameters$repr()))
+    return(self$name)
   },
-  get_paramter = function(self, x) {
+  get_parameter = function(self, x) {
     self$parameters$get(x)
   },
-  set_parameter = function(self, value) {
+  set_parameter = function(self, x, value) {
     self$parameters$set(x, value)
   },
   render_parameter = function(self, x) {

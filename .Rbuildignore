@@ -1,3 +1,5 @@
+^Meta$
+^doc$
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^\.travis\.yml$
@@ -16,5 +18,8 @@ test.log
 gp.log
 spell.log
 README.Rmd
+inst/WORDLIST
 inst/extdata/dictionary.txt
 ^_pkgdown\.yml$
+^CONTRIBUTING\.md$
+^CONTRIBUTING\.Rmd$

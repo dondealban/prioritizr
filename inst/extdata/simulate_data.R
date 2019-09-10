@@ -2,6 +2,7 @@
 # initialize session
 set.seed(500)
 source("R/simulate.R")
+source("R/zones.R")
 library(RandomFields)
 RFoptions(seed = 500)
 
@@ -48,7 +49,7 @@ raster::extent(sim_landscape) <- c(0, 1, 0, 1)
 sim_landscape@crs <- sp::CRS()
 
 # create planning units as raster
-sim_pu_raster <- simulate_cost(sim_landscape, n = 1)
+sim_pu_raster <- simulate_cost(sim_landscape, n = 1)[[1]]
 sim_pu_raster[raster::Which(sim_pu_raster == 0)] <- NA
 
 # make 10 cells in the raster NA
@@ -93,18 +94,85 @@ sim_pu_points$locked_in <- as.logical(sim_pu_points$locked_in)
 sim_pu_points$locked_out <- as.logical(sim_pu_points$locked_out)
 
 # simulate species phylogeny
+## old tree
 sim_phylogeny <- ape::rtree(n = raster::nlayers(sim_features))
 sim_phylogeny$tip.label <- names(sim_features)
+## new tree
+sim_phylogeny <- structure(
+  list(edge = structure(c(6L, 8L, 8L, 9L, 9L, 6L, 7L, 7L, 8L, 1L, 9L, 2L, 3L,
+                          7L, 4L, 5L), .Dim = c(8L, 2L)),
+      edge.length = c(1.42105185442643, 0.34712544386147, 0.0410009787107508,
+                      0.306124465150719, 0.306124465150719, 0.596047695260495,
+                      1.17212960302741, 1.17212960302741),
+      tip.label = c("layer.1", "layer.2", "layer.3", "layer.4", "layer.5"),
+      Nnode = 4L),
+  class = "phylo", order = "cladewise")
+
+# simulate raster planning unit zone data
+sim_pu_zones_stack <- simulate_cost(sim_landscape, n = 3)
+zones_na_cells <- sample.int(raster::ncell(sim_pu_zones_stack[[1]]), size = 10)
+for (z in seq_len(raster::nlayers(sim_pu_zones_stack))) {
+  sim_pu_zones_stack[[z]][raster::Which(sim_pu_zones_stack[[z]] == 0)] <- 1
+  sim_pu_zones_stack[[z]][zones_na_cells] <- NA
+}
+
+# simulate locked zone stack data
+sim_locked_zones_stack <- sim_pu_zones_stack
+old_cells <- c()
+for (i in seq_len(raster::nlayers(sim_locked_zones_stack))) {
+  cells <- raster::Which(!is.na(sim_locked_zones_stack[[i]]), cells = TRUE)
+  sim_locked_zones_stack[[i]][cells] <- NA
+  locked_cells <- sample(cells, 5)
+  locked_cells <- setdiff(locked_cells, old_cells)
+  sim_locked_zones_stack[[i]][locked_cells] <- 1
+  old_cells <- c(old_cells, locked_cells)
+}
+assertthat::assert_that(raster::cellStats(sum(sim_locked_zones_stack,
+                                              na.rm = TRUE),
+                                          "max") == 1)
+
+# simulate raster feature zone data
+sim_features_zones <- replicate(raster::nlayers(sim_pu_zones_stack),
+                                simulate_species(sim_landscape, n = 5),
+                                simplify = FALSE)
+sim_features_zones <- append(sim_features_zones,
+  list(zone_names = paste0("zone_", seq_along(sim_features_zones)),
+       feature_names = paste0("feature_", seq_len(raster::nlayers(
+                         sim_features_zones[[1]])))))
+sim_features_zones <- do.call(zones, sim_features_zones)
+
+# simulate polygon zone data
+sim_pu_zones_polygons <- raster::stack(sim_pu_zones_stack,
+                                       sim_locked_zones_stack)
+sim_pu_zones_polygons <- raster::rasterToPolygons(sim_pu_zones_polygons, n = 4)
+names(sim_pu_zones_polygons) <- c(
+  paste0("cost_", seq_len(raster::nlayers(sim_pu_zones_stack))),
+  paste0("locked_", seq_len(raster::nlayers(sim_pu_zones_stack))))
+sim_pu_zones_polygons$locked_1 <- is.finite(sim_pu_zones_polygons$locked_1)
+sim_pu_zones_polygons$locked_2 <- is.finite(sim_pu_zones_polygons$locked_2)
+sim_pu_zones_polygons$locked_3 <- is.finite(sim_pu_zones_polygons$locked_3)
 
 ## Export data
 # save data
-save(sim_pu_raster, file = "data/sim_pu_raster.rda", compress = "xz")
+save(sim_pu_raster, file = "data/sim_pu_raster.rda", compress = "xz",
+     version = 2)
+save(sim_pu_zones_stack, file = "data/sim_pu_zones_stack.rda", compress = "xz",
+     version = 2)
 save(sim_locked_in_raster, file = "data/sim_locked_in_raster.rda",
-     compress = "xz")
+     compress = "xz", version = 2)
 save(sim_locked_out_raster, file = "data/sim_locked_out_raster.rda",
-     compress = "xz")
-save(sim_pu_polygons, file = "data/sim_pu_polygons.rda", compress = "xz")
-save(sim_pu_lines, file = "data/sim_pu_lines.rda", compress = "xz")
-save(sim_pu_points, file = "data/sim_pu_points.rda", compress = "xz")
-save(sim_features, file = "data/sim_features.rda", compress = "xz")
-save(sim_phylogeny, file = "data/sim_phylogeny.rda", compress = "xz")
+     compress = "xz", version = 2)
+save(sim_pu_polygons, file = "data/sim_pu_polygons.rda", compress = "xz",
+     version = 2)
+save(sim_pu_zones_polygons, file = "data/sim_pu_zones_polygons.rda",
+     compress = "xz", version = 2)
+save(sim_pu_lines, file = "data/sim_pu_lines.rda", compress = "xz", 
+     version = 2)
+save(sim_pu_points, file = "data/sim_pu_points.rda", compress = "xz",
+     version = 2)
+save(sim_features, file = "data/sim_features.rda", compress = "xz",
+     version = 2)
+save(sim_features_zones, file = "data/sim_features_zones.rda",
+     compress = "xz", version = 2)
+save(sim_phylogeny, file = "data/sim_phylogeny.rda", compress = "xz",
+     version = 2)

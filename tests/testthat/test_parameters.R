@@ -11,6 +11,7 @@ test_that("proportion_parameter", {
   expect_equal(x$lower_limit, 0)
   expect_equal(x$upper_limit, 1)
   expect_equal(x$class, "numeric")
+  expect_is(x$id, "Id")
   expect_equal(x$get(), 0.1)
   expect_false(x$validate(NA_real_))
   expect_false(x$validate(Inf))
@@ -45,6 +46,7 @@ test_that("integer_parameter", {
   expect_equal(x$lower_limit, as.integer(-.Machine$integer.max))
   expect_equal(x$upper_limit, as.integer(.Machine$integer.max))
   expect_equal(x$class, "integer")
+  expect_is(x$id, "Id")
   expect_equal(x$get(), 1L)
   expect_false(x$validate(NA_real_))
   expect_false(x$validate(Inf))
@@ -79,6 +81,7 @@ test_that("numeric_parameter", {
   expect_equal(x$lower_limit, .Machine$double.xmin)
   expect_equal(x$upper_limit, .Machine$double.xmax)
   expect_equal(x$class, "numeric")
+  expect_is(x$id, "Id")
   expect_equal(x$get(), 1)
   expect_false(x$validate(NA_real_))
   expect_false(x$validate(Inf))
@@ -108,6 +111,7 @@ test_that("binary_parameter", {
   expect_equal(x$lower_limit, 0L)
   expect_equal(x$upper_limit, 1L)
   expect_equal(x$class, "integer")
+  expect_is(x$id, "Id")
   expect_equal(x$get(), 1L)
   expect_false(x$validate(NA_real_))
   expect_false(x$validate(Inf))
@@ -144,7 +148,6 @@ test_that("proportion_parameter_array", {
   expect_equal(x$class, "numeric")
   expect_equal(rownames(x$get()), letters[1:3])
   expect_equal(x$get()[[1]], c(0.3, 0.1, 0.4))
-  expect_is(x$render(), "shiny.tag.list")
   expect_false(x$validate(data.frame(value = c(Inf, 0.1, 0.2),
                           row.names = letters[1:3])))
   expect_false(x$validate(data.frame(value = c(NA_real_, 0.1, 0.2),
@@ -182,6 +185,9 @@ test_that("proportion_parameter_array", {
                                 row.names = letters[1:3])))
   expect_error(x$set(data.frame(value = c(0.1, 0.1, 0.2),
                                 row.names = c("a", "b", "d"))))
+  # render
+  skip_if_not_installed("rhandsontable")
+  expect_is(x$render(), "shiny.tag.list")
 })
 
 test_that("binary_parameter_array", {
@@ -197,7 +203,6 @@ test_that("binary_parameter_array", {
   expect_equal(x$class, "integer")
   expect_equal(rownames(x$get()), letters[1:3])
   expect_equal(x$get()[[1]], c(0L, 1L, 1L))
-  expect_is(x$render(), "shiny.tag.list")
   expect_false(x$validate(data.frame(value = c(Inf, 1L, 1L),
     row.names = letters[1:3])))
   expect_false(x$validate(data.frame(value = c(NA_real_, 1L, 1L),
@@ -233,8 +238,10 @@ test_that("binary_parameter_array", {
     row.names = letters[1:3])))
   expect_error(x$set(data.frame(value = c(-4L, 0L, 1L),
     row.names = c("a", "b", "d"))))
+  # render
+  skip_if_not_installed("rhandsontable")
+  expect_is(x$render(), "shiny.tag.list")
 })
-
 
 test_that("numeric_parameter_array", {
   x <- numeric_parameter_array("test", c(-8, 0.1, 5), letters[1:3])
@@ -249,7 +256,6 @@ test_that("numeric_parameter_array", {
   expect_equal(x$class, "numeric")
   expect_equal(rownames(x$get()), letters[1:3])
   expect_equal(x$get()[[1]], c(-8, 0.1, 5))
-  expect_is(x$render(), "shiny.tag.list")
   expect_false(x$validate(data.frame(
                             value = c(Inf, 0.1, 0.2),
                             row.names = letters[1:3])))
@@ -298,6 +304,91 @@ test_that("numeric_parameter_array", {
                                 row.names = letters[1:3])))
   expect_error(x$set(data.frame(value = c(0.1, 5, 0.2),
                                 row.names = c("a", "b", "d"))))
+  # render
+  skip_if_not_installed("rhandsontable")
+  expect_is(x$render(), "shiny.tag.list")
+})
+
+test_that("misc_parameter", {
+  # load data
+  data(mtcars, iris)
+  # create parameter
+  x <- misc_parameter("tbl", iris,
+                      function(x) all(names(x) %in% names(iris)) &&
+                                  all(x[[1]] < 200),
+                      function(id, x) structure(id, class = "shiny.tag"))
+  # run tests
+  x$show()
+  x$print()
+  expect_is(x$id, "Id")
+  expect_equal(x$get(), iris)
+  expect_false(x$validate(mtcars))
+  # create updated iris data set
+  iris2 <- iris
+  iris2[1, 1] <- 300
+  expect_false(x$validate(iris2))
+  iris2[1, 1] <- 50
+  x$set(iris2)
+  expect_equal(x$get(), iris2)
+  expect_is(x$render(), "shiny.tag")
+  x$reset()
+  expect_equal(x$get(), iris)
+  # errors
+  iris2[1, 1] <- 300
+  expect_error(x$set(iris2))
+  expect_error(x$set(mtcars))
+})
+
+test_that("numeric_matrix_parameter", {
+  # load data
+  m <- matrix(runif(9), ncol = 3)
+  colnames(m) <- letters[1:3]
+  rownames(m) <- letters[1:3]
+  x <- numeric_matrix_parameter("m", m)
+  # methods
+  x$show()
+  x$print()
+  expect_is(x$id, "Id")
+  expect_equal(x$get(), m)
+  expect_false(x$validate(m[, -1]))
+  expect_false(x$validate(m[-1, ]))
+  m2 <- m
+  m2[] <- NA
+  expect_false(x$validate(m2))
+  x$set(m + 1)
+  expect_equal(x$get(), m + 1)
+  # errors
+  expect_error(x$set(as.data.frame(m)))
+  expect_error(x$set(m2))
+  # render
+  skip_if_not_installed("rhandsontable")
+  expect_is(x$render(), "shiny.tag.list")
+})
+
+test_that("binary_matrix_parameter", {
+  # load data
+  m <- matrix(round(runif(9)), ncol = 3)
+  colnames(m) <- letters[1:3]
+  rownames(m) <- letters[1:3]
+  x <- binary_matrix_parameter("m", m)
+  # methods
+  x$show()
+  x$print()
+  expect_is(x$id, "Id")
+  expect_equal(x$get(), m)
+  expect_false(x$validate(m[, -1]))
+  expect_false(x$validate(m[-1, ]))
+  m2 <- m
+  m2[] <- NA
+  expect_false(x$validate(m2))
+  x$set(abs(m - 1))
+  expect_equal(x$get(), abs(m + -1))
+  # errors
+  expect_error(x$set(as.data.frame(m)))
+  expect_error(x$set(m2))
+  # render
+  skip_if_not_installed("rhandsontable")
+  expect_is(x$render(), "shiny.tag.list")
 })
 
 test_that("parameters", {
@@ -313,7 +404,6 @@ test_that("parameters", {
   expect_equal(x$get(p1$name), p1$get())
   expect_equal(x$render(p1$id), p1$render())
   expect_equal(x$render(p1$name), p1$render())
-  expect_is(x$render_all(), "shiny.tag")
   x$set(p1$id, 0.9)
   x$set(p2$name, data.frame(value = c(0.1, 5, 0.2),
                             row.names = c("a", "b", "c")))
@@ -336,4 +426,7 @@ test_that("parameters", {
   expect_error(parameters(1, p1))
   expect_error(x$set(data.frame(value = c(0.1, 5, 0.2),
                                 row.names = c("a", "b", "d"))))
+  # render
+  skip_if_not_installed("rhandsontable")
+  expect_is(x$render_all(), "shiny.tag")
 })

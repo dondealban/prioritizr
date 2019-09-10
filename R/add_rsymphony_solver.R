@@ -1,20 +1,12 @@
 #' @include Solver-proto.R
 NULL
 
-#' Add a SYMPHONY solver with Rsymphony
+#' Add a SYMPHONY solver with \pkg{Rsymphony}
 #'
-#' Specify the use of a SYMPHONY algorithm to solve a
-#' \code{\link{ConservationProblem-class}} object. Requires the
-#' \code{Rsymphony} package.
-#'
-#' @details
-#'     \href{https://projects.coin-or.org/SYMPHONY}{SYMPHONY} is an open-source
-#'     integer programming solver that is part of the Computational
-#'     Infrastructure for Operations Research (COIN-OR) project, an initiative
-#'     to promote development of open-source tools for operations research (a
-#'     field that includes linear programming). The \code{Rsymphony} package
-#'     provides an interface to COIN-OR and is available on CRAN. This solver
-#'     uses the \code{Rsymphony} package to solve problems.
+#' Specify that the \emph{SYMPHONY} software should be used to solve a
+#' conservation planning problem using the \pkg{Rsymphony} package. This
+#' function can also be used to customize the behavior of the solver.
+#' It requires the \pkg{Rsymphony} package.
 #'
 #' @param x \code{\link{ConservationProblem-class}} object.
 #'
@@ -38,7 +30,15 @@ NULL
 #' @param verbose \code{logical} should information be printed while solving
 #'  optimization problems? Defaults to \code{TRUE}.
 #'
-#' @seealso \code{\link{solvers}}.
+#' @details \href{https://projects.coin-or.org/SYMPHONY}{\emph{SYMPHONY}} is an
+#'   open-source integer programming solver that is part of the Computational
+#'   Infrastructure for Operations Research (COIN-OR) project, an initiative
+#'   to promote development of open-source tools for operations research (a
+#'   field that includes linear programming). The \pkg{Rsymphony} package
+#'   provides an interface to COIN-OR and is available on \emph{CRAN}.
+#'   This solver uses the \pkg{Rsymphony} package to solve problems.
+#'
+#' @inherit add_gurobi_solver seealso return
 #'
 #' @examples
 #' # load data
@@ -51,7 +51,7 @@ NULL
 #'   add_binary_decisions()
 #' \donttest{
 #' # if the package is installed then add solver and generate solution
-#' if (requireNamespace("Rsymphony", quietly = TRUE)) {
+#' if (require("Rsymphony")) {
 #'   # specify solver and generate solution
 #'   s <- p %>% add_rsymphony_solver(time_limit = 10) %>%
 #'              solve()
@@ -90,16 +90,18 @@ add_rsymphony_solver <- function(x, gap = 0.1, time_limit = -1,
     "RsymphonySolver",
     Solver,
     name = "Rsymphony",
+    data = list(),
     parameters = parameters(
       numeric_parameter("gap", gap, lower_limit = 0),
       integer_parameter("time_limit", time_limit, lower_limit = -1,
                         upper_limit = .Machine$integer.max),
       binary_parameter("first_feasible", first_feasible),
       binary_parameter("verbose", verbose)),
-    solve = function(self, x) {
+    calculate = function(self, x, ...) {
+      # create model
       model <- list(
         obj = x$obj(),
-        mat = as.matrix(x$A()),
+        mat = x$A(),
         dir = x$sense(),
         rhs = x$rhs(),
         types = x$vtype(),
@@ -115,12 +117,46 @@ add_rsymphony_solver <- function(x, gap = 0.1, time_limit = -1,
       model$types <- replace(model$types, model$types == "S", "C")
       names(p)[which(names(p) == "gap")] <- "gap_limit"
       p$first_feasible <- as.logical(p$first_feasible)
+      # store input data and parameters
+      self$set_data("model", model)
+      self$set_data("parameters", p)
+      # return success
+      invisible(TRUE)
+    },
+    set_variable_ub = function(self, index, value) {
+      self$data$model$bounds$upper$val[index] <- value
+      invisible(TRUE)
+    },
+    set_variable_lb = function(self, index, value) {
+      self$data$model$bounds$lower$val[index] <- value
+      invisible(TRUE)
+    },
+    run = function(self) {
+      # access input data and parameters
+      model <- self$get_data("model")
+      p <- self$get_data("parameters")
+      # solve problem
       start_time <- Sys.time()
       x <- do.call(Rsymphony::Rsymphony_solve_LP, append(model, p))
       end_time <- Sys.time()
       if (is.null(x$solution) ||
           names(x$status) %in% c("TM_NO_SOLUTION", "PREP_NO_SOLUTION"))
         return(NULL)
+        if (any(x$solution > 1)) {
+          if (max(x$solution) < 1.01) {
+            x$solution[x$solution > 1] <- 1
+          } else {
+            stop("infeasible solution returned, try relaxing solver parameters")
+          }
+        }
+        if (any(x$solution < 0)) {
+          if (min(x$solution) > -0.01) {
+            x$solution[x$solution < 0] <- 0
+          } else {
+            stop("infeasible solution returned, try relaxing solver parameters")
+          }
+        }
+      # return output
       return(list(x = x$solution, objective = x$objval,
                   status = as.character(x$status),
                   runtime = as.double(end_time - start_time,

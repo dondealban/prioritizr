@@ -25,7 +25,7 @@ from the random fields simulation.}
   layer for each species.
 }
 \description{
-Simulate spatially auto-correlated data using random fields.
+Simulate spatially auto-correlated data.
 }
 \examples{
 \donttest{
@@ -39,7 +39,6 @@ d <- simulate_data(r, n = 1, model = RandomFields::RMgauss())
 # plot simulated data
 plot(d, main = "random Gaussian field")
 }
-
 }
 \seealso{
 \code{\link[RandomFields]{RFsimulate}},
